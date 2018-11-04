@@ -1,15 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Collections;
 using System.IO;
-using System.Diagnostics;
 
 namespace IMG_Stego
 {
@@ -73,28 +69,7 @@ namespace IMG_Stego
             return bitsArray;
         }
 
-        public void binRead()
-        {
-            DialogResult orb = openFileDialog1.ShowDialog();
-
-            if (orb == DialogResult.OK)
-            {
-                string path = openFileDialog1.FileName;
-
-                try
-                {
-                    using (FileStream fs = File.Open(path, FileMode.Open))
-                    {
-                        data = new BinaryReader(fs).ReadBytes((int)fs.Length);
-                    }
-                }
-                catch (IOException ioe)
-                {
-                    MessageBox.Show("Error while opening file!" + ioe.Message);
-                }
-            }
-        }
-
+        
         /*This method is used to embed data into pixels*/
         public Color embed(Color pixel, byte[] bits)
         {
@@ -162,10 +137,6 @@ namespace IMG_Stego
                 {
                     buttonApply1.Enabled = true;
                 }
-                if (string.IsNullOrEmpty(textBoxFileMessage.Text) == false)
-                {
-                    buttonEmbed.Enabled = true;
-                }  
             }
            
         }
@@ -278,164 +249,17 @@ namespace IMG_Stego
             }
         }
 
-        //Read file in binary format...
-        private void buttonOpen1_Click(object sender, EventArgs e)
-        {
-            binRead();
-            textBoxFileMessage.Text = openFileDialog1.FileName;
-            if (pictureBoxCoverImage.Image != null) buttonEmbed.Enabled = true;
-        }
-
-        //Embed file into cover image...
-        private void buttonFApply1_Click(object sender, EventArgs e)
-        {
-            string path = openFileDialog1.FileName;
-            string name = openFileDialog1.SafeFileName;
-
-            labelProgress.Text = "Processing...";
-
-            using (FileStream fs = File.Open(path, FileMode.Open))
-            {
-                data = new BinaryReader(fs).ReadBytes((int)fs.Length);
-            }
-
-            mainImage = new Bitmap(textBoxBrowseMessage.Text);
-
-            // Embedding binary data
-            #region Encoding
-
-            if (data.Length > mainImage.Height * mainImage.Width - 30 ) MessageBox.Show("Data is larger than image size!");
-            else
-            {
-
-                //Embed data type into 3 pixels.
-                #region type_embed
-
-                // "tb1" is the code to define hidden data is a binary file. (type:binary:1)
-                string[] type = { "t", "b", "1" };
-
-                for (int j = 0; j < 3; j++)
-                {
-                    Color pixel = mainImage.GetPixel(mainImage.Width - j - 1, mainImage.Height - 1);
-                    pixel = embed(pixel, getStringBits(type[j]));
-                    mainImage.SetPixel(mainImage.Width - j - 1, mainImage.Height - 1, pixel);
-                }
-
-                #endregion
-
-                /*Embed length of data into last 13 pixels of cover image.
-                  Supported maximum image size using 13 pixels = (width x height = 10^13 - 1)*/
-                #region dataLength_embed(13 pixels)
-
-                string a = (Convert.ToString(data.Length)).PadLeft(13,'0'); //Zero-padding
-                char[] b = a.ToArray();
-
-                for (int j = 3; j < 16; j++)
-                {
-                    string aString = Convert.ToString(b[j-3]);
-                    Color pixel = mainImage.GetPixel(mainImage.Width - j - 1, mainImage.Height - 1);
-                    pixel = embed(pixel, getStringBits(aString));
-                    mainImage.SetPixel(mainImage.Width - j - 1, mainImage.Height - 1, pixel);
-                }
-                #endregion
-
-                //Embed file name into cover image.
-                #region name_embed(4 + name.Length pixels)
-
-                //Embed length of file name into 4 pixels.
-                #region name_length(3 pixels)
-
-                string lname = Convert.ToString(name.Length).PadLeft(4, '0');
-                char[] nl = lname.ToArray();
-
-                for (int j = 16; j < 20; j++)
-                {
-                    string nlString = Convert.ToString(nl[j - 16]);
-                    Color pixel = mainImage.GetPixel(mainImage.Width - j - 1, mainImage.Height - 1);
-                    pixel = embed(pixel, getStringBits(nlString));
-                    mainImage.SetPixel(mainImage.Width - j - 1, mainImage.Height - 1, pixel);
-                }
-
-                #endregion
-
-                char[] cname = name.ToArray();
-
-                for (int j = 20; j < 20 + name.Length; j++)
-                {
-                    string name_array = Convert.ToString(cname[j - 20]);
-                    Color pixel = mainImage.GetPixel(mainImage.Width - j - 1, mainImage.Height - 1);
-                    pixel = embed(pixel, getStringBits(name_array));
-                    mainImage.SetPixel(mainImage.Width - j - 1, mainImage.Height - 1, pixel);
-                }
-
-                #endregion
-
-                //Embed binary data into cover image.
-                #region data_embed
-
-                int k = 0;
-                progressBar1.Minimum = 0;
-                progressBar1.Maximum = data.Length - 1;
-
-                for (int i = 0; i < mainImage.Height; i++)
-                {
-                        for (int j = 0; j < mainImage.Width; j++)
-                        {
-                            if (k < data.Length)
-                            {
-                                Color pixel = mainImage.GetPixel(j, i);
-                                pixel = embed(pixel, getBits(data[k]));
-                                mainImage.SetPixel(j, i, pixel);
-                                progressBar1.Value = k;
-                                k++;
-                            }
-                    }
-                }
-
-                pictureBoxShow.Image = mainImage;
-                labelProgress.Text = "Completed!";
-                buttonSaveAsEmbed.Enabled = true;
-                #endregion
-            #endregion
-
-            }
-        }
-
-        //Save stego image...
-        private void buttonSaveAs1_Click(object sender, EventArgs e)
-        {
-            SaveFileDialog saveEncoded = new SaveFileDialog();
-            saveEncoded.Filter = "Bitmap files (*.bmp)|*.bmp";
-            string pathEncoded = "";
-
-            if (saveEncoded.ShowDialog() == DialogResult.OK)
-            {
-                pathEncoded = saveEncoded.FileName;
-            }
-
-            try
-            {
-                mainImage.Save(pathEncoded);
-                MessageBox.Show("Stego image has been saved successfully!\n" + pathEncoded);
-            }
-            catch (IOException ioe)
-            {
-                MessageBox.Show("Error while writing file!" + ioe.Message);
-            }
-        }
-
+        
         //Text embedding - radioButton
         private void radioButton2_CheckedChanged(object sender, EventArgs e)
         {
-            groupBoxPlainFile.Show();
-            groupBoxPlainText.Hide();
+
         }
 
         //File embedding - radioButton
         private void radioButton1_CheckedChanged(object sender, EventArgs e)
         {
-            groupBoxPlainFile.Hide();
-            groupBoxPlainText.Show();
+
         }
 
         //Open stego image...
@@ -554,135 +378,8 @@ namespace IMG_Stego
             labelProgress.Text = "Completed!";
             #endregion
         }
-
-        //File extraction...
-        private void button1_Click(object sender, EventArgs e)
-        {
-            Stopwatch sw = new Stopwatch();
-            sw.Start();
-            richTextBoxInfo.Text = "> Loading...\n";
-            labelProgress.Text = "Processing...";
-            EncryptedImage = new Bitmap(pictureBoxEncoded2.Image);
-
-            /* Decoding process */
-            #region Decoding
-
-            int k = 0;
-
-            //Extract length of file from last 13 pixels [3:15].
-            #region data_length
-
-            string flength = "";
-
-            for (int j = 3; j < 16; j++)
-            {
-                Color pixelToDecode = EncryptedImage.GetPixel(EncryptedImage.Width - j - 1, EncryptedImage.Height - 1);
-                byte delength = extract(pixelToDecode);                
-                flength += Convert.ToInt32(Encoding.ASCII.GetString(BitConverter.GetBytes(delength)));
-            }
-
-            int length = Convert.ToInt32(flength);
-
-            #endregion
-
-            //Extract file name from the picture
-            #region name
-
-            //Extract length of file name from 4 pixels in the picture [16:19]
-            #region name_length
-
-            string dlength = "";
-
-            for (int j = 16; j < 20; j++)
-            {
-                Color pixelToDecode = EncryptedImage.GetPixel(EncryptedImage.Width - j - 1, EncryptedImage.Height - 1);
-                byte delength = extract(pixelToDecode);
-                dlength += Convert.ToInt32(Encoding.ASCII.GetString(BitConverter.GetBytes(delength)));
-            }
-
-            int name_length = Convert.ToInt32(dlength);
-
-            #endregion
-
-            textBox1.Text = "";
-
-            for (int j = 20; j < 20 + name_length; j++)
-            {
-                Color pixelToDecode = EncryptedImage.GetPixel(EncryptedImage.Width - j - 1, EncryptedImage.Height - 1);
-                byte delength = extract(pixelToDecode);
-                textBox1.Text += Encoding.ASCII.GetString(BitConverter.GetBytes(delength));
-            }
-
-            string name = textBox1.Text;
-
-            #endregion
-
-            //Extract binary data from stego image.
-            byte[] data = new byte[length];
-
-            for (int i = 0; i < EncryptedImage.Height; i++)
-            {
-
-                for (int j = 0; j < EncryptedImage.Width; j++)
-                {
-                    if (k < length)
-                    {
-                        Color pixelToDecode = EncryptedImage.GetPixel(j, i);
-                        byte demsg = extract(pixelToDecode);
-                        data[k] = demsg;
-                        k++;
-                    }
-                }
-            }
-
-            labelProgress.Text = "Completed!";
-            string pathRecoded = Path.GetDirectoryName(ofd.FileName) + "\\" + name;
-
-            #endregion
-            #endregion
-
-            sw.Stop();
-            string time = string.Format("{0} mins, {1} secs", sw.Elapsed.Minutes, sw.Elapsed.Seconds);
-
-            richTextBoxInfo.Text += "> It's done!\n";
-            richTextBoxInfo.Text += "> Duration: " + time + "\n\n";
-
-            try
-            {
-
-                if (File.Exists(pathRecoded))
-                {
-                    if (MessageBox.Show(name + " already exists!\nOverwrite?", "Warning!", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-                    {
-                        FileStream write = new FileStream(pathRecoded, FileMode.Create);
-                        BinaryWriter writeBinary = new BinaryWriter(write);
-                        writeBinary.Write(data);
-                        writeBinary.Close();
-                        richTextBoxInfo.Text += "> Extracted file : " + name + "\n";
-                        richTextBoxInfo.Text += "> Extraction path: " + Path.GetDirectoryName(ofd.FileName) + "\n\n";
-                        //Load path
-                        Process.Start(Path.GetDirectoryName(ofd.FileName));
-                    }
-                }
-                else
-                {
-                    FileStream write = new FileStream(pathRecoded, FileMode.Create);
-                    BinaryWriter writeBinary = new BinaryWriter(write);
-                    writeBinary.Write(data);
-                    writeBinary.Close();
-                    richTextBoxInfo.Text += "> Extracted file : " + name + "\n";
-                    richTextBoxInfo.Text += "> Extraction path: " + Path.GetDirectoryName(ofd.FileName) + "\n\n";
-                    // Load path
-                    Process.Start(Path.GetDirectoryName(ofd.FileName));
-                }
-               
-            }
-            catch (IOException ioe)
-            {
-                MessageBox.Show("Error while writing file!" + ioe.Message);
-            }
-        }
-
+        
+        #endregion
         //Extract text - radioButton
         private void radioButtonExtractText_CheckedChanged(object sender, EventArgs e)
         {
@@ -690,11 +387,10 @@ namespace IMG_Stego
             groupBoxRecodedText.Show();
         }
 
-        //Exctact file - radioButton
+        //Exctact file - radioButton || phase2 code goes here
         private void radioButtonExtractFile_CheckedChanged(object sender, EventArgs e)
         {
-            groupBoxRecodedFile.Show();
-            groupBoxRecodedText.Hide();
+
         }
 
         private void exitToolStripMenuItem_Click(object sender, EventArgs e)
@@ -704,13 +400,24 @@ namespace IMG_Stego
 
         private void aboutToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            string app = "IMG Stego v1.0";
-            string author = "Kadir Tekeli ";
-            string year = " 2015 ";
-            string email = "kadir.tekeli@outlook.com";
+            string app = "STEGO-img v1.0";
+            string author = "DILEENA DILEEP ";
+            string year = " 2018 ";
+            string email = "dileena007@gmail.com";
+            string forwhat = "[Developed as MCA mini project || University of Kannur]";
 
-            MessageBox.Show("\t" + app + "\t\n\n\n\t" + author + (char)169 + year + "\n\t" + email + "\t\t", "About", MessageBoxButtons.OK);
+            MessageBox.Show("\t" + app + "\t\n\n\n\t" + author + (char)169 + year + "\n\t" + email + "\t\n\n\n\t" + forwhat + "\t\t", "About", MessageBoxButtons.OK);
         }
 
+
+        private void labelVersion_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void pictureBoxShow_Click(object sender, EventArgs e)
+        {
+
+        }
     }
 }
